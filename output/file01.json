@@ -13,5 +13,12 @@
       "page": 1,
       "confidence": 0.8
     }
-  ]
+  ],
+  "metadata": {
+    "filename": "file01.pdf",
+    "model": "BERT-optimized",
+    "optimize_speed": true,
+    "processing_time_seconds": 0.03,
+    "outline_count": 2
+  }
 }

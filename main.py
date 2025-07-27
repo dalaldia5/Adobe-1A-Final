@@ -2,6 +2,7 @@
 """
 Enhanced PDF Outline Extractor for Adobe India Hackathon Round 1A
 Extracts structured outlines (Title, H1, H2, H3) from PDF documents
+Time-optimized version
 """
 
 import os
@@ -16,14 +17,19 @@ import argparse
 import logging
 import torch
 from collections import Counter
+import time
+from functools import lru_cache
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class PDFOutlineExtractor:
-    def __init__(self, model_path: str = "models/bert-mini"):
+    def __init__(self, model_path: str = "models/bert-mini", optimize_speed: bool = True):
         """Initialize the PDF outline extractor with a pre-trained model."""
+        self.optimize_speed = optimize_speed
+        start_time = time.time()
+        
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         logger.info(f"Using device: {self.device}")
         
@@ -37,6 +43,8 @@ class PDFOutlineExtractor:
         )
         self.model.to(self.device)
         self.model.eval()
+        
+        logger.info(f"Model loading time: {time.time() - start_time:.2f} seconds")
         
         # Label mapping
         self.label_map = {0: "Title", 1: "H1", 2: "H2", 3: "H3", 4: "Other"}
@@ -56,8 +64,26 @@ class PDFOutlineExtractor:
             r'^\([a-z]\)\s',      # (a) format
         ]
         
+        # Cache for text block extraction
+        self.text_blocks_cache = {}
+        self.classification_cache = {}
+        
+    @lru_cache(maxsize=32)
+    def _get_font_percentiles(self, font_sizes_tuple):
+        """Calculate font percentiles from a tuple of font sizes (for caching)"""
+        font_sizes = list(font_sizes_tuple)
+        if font_sizes:
+            return np.percentile(font_sizes, [10, 25, 50, 75, 85, 95]), np.median(font_sizes)
+        else:
+            return [8, 10, 12, 14, 16, 18], 12
+        
     def extract_text_blocks(self, pdf_path: str) -> List[Dict]:
         """Extract text blocks with enhanced metadata from PDF."""
+        # Check cache first
+        if pdf_path in self.text_blocks_cache:
+            return self.text_blocks_cache[pdf_path]
+            
+        start_time = time.time()
         doc = fitz.open(pdf_path)
         blocks = []
         
@@ -66,7 +92,8 @@ class PDFOutlineExtractor:
         all_blocks_raw = []
         
         # First pass: collect all font sizes
-        for page_num in range(len(doc)):
+        max_pages = min(len(doc), 10 if self.optimize_speed else len(doc))
+        for page_num in range(max_pages):
             page = doc[page_num]
             text_dict = page.get_text("dict")
             
@@ -77,15 +104,10 @@ class PDFOutlineExtractor:
                             all_font_sizes.append(span["size"])
         
         # Calculate global font percentiles
-        if all_font_sizes:
-            font_percentiles = np.percentile(all_font_sizes, [10, 25, 50, 75, 85, 95])
-            median_font = np.median(all_font_sizes)
-        else:
-            font_percentiles = [8, 10, 12, 14, 16, 18]
-            median_font = 12
+        font_percentiles, median_font = self._get_font_percentiles(tuple(all_font_sizes))
             
         # Second pass: extract blocks with enhanced features
-        for page_num in range(len(doc)):
+        for page_num in range(max_pages):
             page = doc[page_num]
             text_dict = page.get_text("dict")
             page_height = page.rect.height
@@ -160,11 +182,15 @@ class PDFOutlineExtractor:
                         })
         
         doc.close()
-        logger.info(f"Extracted {len(blocks)} text blocks")
+        logger.info(f"Extracted {len(blocks)} text blocks in {time.time() - start_time:.2f} seconds")
+        
+        # Cache the results
+        self.text_blocks_cache[pdf_path] = blocks
         return blocks
     
     def apply_heuristic_rules(self, blocks: List[Dict]) -> List[Dict]:
         """Apply heuristic rules before ML classification."""
+        start_time = time.time()
         for block in blocks:
             text = block["text"]
             
@@ -192,7 +218,8 @@ class PDFOutlineExtractor:
                     block["heuristic_hint"] = "H2"
             else:
                 block["heuristic_hint"] = "Other"
-                
+        
+        logger.info(f"Applied heuristic rules in {time.time() - start_time:.2f} seconds")
         return blocks
     
     def classify_text_blocks(self, blocks: List[Dict]) -> List[Dict]:
@@ -200,13 +227,41 @@ class PDFOutlineExtractor:
         if not blocks:
             return []
         
+        start_time = time.time()
+        
         # Apply heuristic rules first
         blocks = self.apply_heuristic_rules(blocks)
         
+        # Filter blocks for ML classification if optimizing for speed
+        if self.optimize_speed:
+            # Only classify blocks that are likely to be headings based on heuristics
+            potential_heading_blocks = [
+                block for block in blocks 
+                if (block["heuristic_hint"] != "Other" or 
+                    block["font_ratio"] > 1.1 or 
+                    block["is_bold"] or 
+                    block["font_percentile"] > 65)
+            ]
+            
+            # Limit number of blocks to process
+            blocks_to_classify = potential_heading_blocks[:min(len(potential_heading_blocks), 100)]
+        else:
+            blocks_to_classify = blocks
+        
         # Prepare enhanced features for ML classification
         texts = []
+        blocks_to_process = []
         
-        for block in blocks:
+        for block in blocks_to_classify:
+            # Check cache first
+            cache_key = (block["text"], block["font_ratio"], block["is_bold"], block["is_italic"], block["heuristic_hint"])
+            if cache_key in self.classification_cache:
+                cached_result = self.classification_cache[cache_key]
+                block["predicted_label"] = cached_result["predicted_label"]
+                block["confidence"] = cached_result["confidence"]
+                block["ml_prediction"] = cached_result["ml_prediction"]
+                continue
+                
             # Create rich feature representation
             text = block["text"]
             
@@ -219,58 +274,80 @@ class PDFOutlineExtractor:
             
             feature_text = f"{font_tag} {position_tag} {style_tag} {content_tag} {hint_tag} {text}"
             texts.append(feature_text)
+            blocks_to_process.append(block)
         
         # ML Classification
-        predictions = []
-        confidences = []
-        batch_size = 16  # Increased batch size for better efficiency
-        
-        for i in range(0, len(texts), batch_size):
-            batch_texts = texts[i:i+batch_size]
+        if texts:
+            predictions = []
+            confidences = []
+            batch_size = 32 if self.optimize_speed else 16  # Increased batch size for better efficiency
             
-            # Tokenize
-            inputs = self.tokenizer(
-                batch_texts,
-                truncation=True,
-                padding=True,
-                max_length=512,  # Increased for richer features
-                return_tensors="pt"
-            ).to(self.device)
-            
-            # Predict
-            with torch.no_grad():
-                outputs = self.model(**inputs)
-                probabilities = torch.softmax(outputs.logits, dim=-1)
-                batch_predictions = torch.argmax(probabilities, dim=-1).cpu().numpy()
-                batch_confidences = torch.max(probabilities, dim=-1)[0].cpu().numpy()
+            for i in range(0, len(texts), batch_size):
+                batch_texts = texts[i:i+batch_size]
                 
-            predictions.extend(batch_predictions)
-            confidences.extend(batch_confidences)
-        
-        # Combine ML predictions with heuristics
-        for i, block in enumerate(blocks):
-            ml_prediction = self.label_map[predictions[i]]
-            heuristic_prediction = block["heuristic_hint"]
-            confidence = float(confidences[i])
-            
-            # Use heuristics for high-confidence cases
-            if (heuristic_prediction != "Other" and 
-                (confidence < 0.7 or heuristic_prediction == "Title")):
-                final_prediction = heuristic_prediction
-                confidence = max(confidence, 0.8)  # Boost confidence
-            else:
-                final_prediction = ml_prediction
+                # Tokenize
+                inputs = self.tokenizer(
+                    batch_texts,
+                    truncation=True,
+                    padding=True,
+                    max_length=256 if self.optimize_speed else 512,  # Reduced for speed
+                    return_tensors="pt"
+                ).to(self.device)
                 
-            block["predicted_label"] = final_prediction
-            block["confidence"] = confidence
-            block["ml_prediction"] = ml_prediction
+                # Predict
+                with torch.no_grad():
+                    outputs = self.model(**inputs)
+                    probabilities = torch.softmax(outputs.logits, dim=-1)
+                    batch_predictions = torch.argmax(probabilities, dim=-1).cpu().numpy()
+                    batch_confidences = torch.max(probabilities, dim=-1)[0].cpu().numpy()
+                    
+                predictions.extend(batch_predictions)
+                confidences.extend(batch_confidences)
+            
+            # Combine ML predictions with heuristics
+            for i, block in enumerate(blocks_to_process):
+                ml_prediction = self.label_map[predictions[i]]
+                heuristic_prediction = block["heuristic_hint"]
+                confidence = float(confidences[i])
+                
+                # Use heuristics for high-confidence cases
+                if (heuristic_prediction != "Other" and 
+                    (confidence < 0.7 or heuristic_prediction == "Title")):
+                    final_prediction = heuristic_prediction
+                    confidence = max(confidence, 0.8)  # Boost confidence
+                else:
+                    final_prediction = ml_prediction
+                    
+                block["predicted_label"] = final_prediction
+                block["confidence"] = confidence
+                block["ml_prediction"] = ml_prediction
+                
+                # Cache the result
+                cache_key = (block["text"], block["font_ratio"], block["is_bold"], block["is_italic"], block["heuristic_hint"])
+                self.classification_cache[cache_key] = {
+                    "predicted_label": final_prediction,
+                    "confidence": confidence,
+                    "ml_prediction": ml_prediction
+                }
         
+        # For blocks that weren't processed (if optimizing for speed), use heuristic prediction
+        if self.optimize_speed:
+            processed_texts = {block["text"] for block in blocks_to_process}
+            for block in blocks:
+                if block["text"] not in processed_texts:
+                    block["predicted_label"] = block["heuristic_hint"]
+                    block["confidence"] = 0.7
+                    block["ml_prediction"] = block["heuristic_hint"]
+        
+        logger.info(f"Classified text blocks in {time.time() - start_time:.2f} seconds")
         return blocks
     
     def post_process_predictions(self, blocks: List[Dict]) -> Dict:
         """Enhanced post-processing with better hierarchy detection."""
         if not blocks:
             return {"title": "", "outline": []}
+        
+        start_time = time.time()
         
         # Sort by page and position
         blocks.sort(key=lambda x: (x["page"], x["y_position"]))
@@ -340,6 +417,8 @@ class PDFOutlineExtractor:
         # Ensure proper hierarchy
         unique_outline = self.fix_hierarchy(unique_outline)
         
+        logger.info(f"Post-processed predictions in {time.time() - start_time:.2f} seconds")
+        
         return {
             "title": title,
             "outline": unique_outline
@@ -374,6 +453,7 @@ class PDFOutlineExtractor:
     
     def extract_outline(self, pdf_path: str) -> Dict:
         """Main method to extract outline from PDF."""
+        total_start_time = time.time()
         logger.info(f"Processing PDF: {pdf_path}")
         
         try:
@@ -392,6 +472,7 @@ class PDFOutlineExtractor:
             
             logger.info(f"Found title: '{result['title'][:50]}...' (truncated)")
             logger.info(f"Found {len(result['outline'])} headings")
+            logger.info(f"Total processing time: {time.time() - total_start_time:.2f} seconds")
             
             return result
             
@@ -399,12 +480,14 @@ class PDFOutlineExtractor:
             logger.error(f"Error processing {pdf_path}: {str(e)}")
             return {"title": "", "outline": []}
 
-def process_directory(input_dir: str, output_dir: str, model_path: str = "models/bert-mini"):
+def process_directory(input_dir: str, output_dir: str, model_path: str = "models/bert-mini", optimize_speed: bool = True):
     """Process all PDFs in input directory and save results to output directory."""
     os.makedirs(output_dir, exist_ok=True)
     
     # Initialize extractor
-    extractor = PDFOutlineExtractor(model_path)
+    start_time = time.time()
+    extractor = PDFOutlineExtractor(model_path, optimize_speed=optimize_speed)
+    logger.info(f"Extractor initialization time: {time.time() - start_time:.2f} seconds")
     
     # Process all PDF files
     pdf_files = [f for f in os.listdir(input_dir) if f.lower().endswith('.pdf')]
@@ -418,13 +501,16 @@ def process_directory(input_dir: str, output_dir: str, model_path: str = "models
         
         try:
             # Extract outline
+            start_time = time.time()
             result = extractor.extract_outline(pdf_path)
+            processing_time = time.time() - start_time
             
             # Add metadata
             result["metadata"] = {
                 "filename": pdf_file,
                 "processing_timestamp": datetime.now().isoformat(),
-                "outline_count": len(result["outline"])
+                "outline_count": len(result["outline"]),
+                "processing_time_seconds": round(processing_time, 2)
             }
             
             # Save result
@@ -435,10 +521,11 @@ def process_directory(input_dir: str, output_dir: str, model_path: str = "models
                 "file": pdf_file,
                 "status": "success",
                 "title_found": bool(result["title"]),
-                "outline_count": len(result["outline"])
+                "outline_count": len(result["outline"]),
+                "processing_time_seconds": round(processing_time, 2)
             })
             
-            logger.info(f"✅ Processed {pdf_file} -> {output_file}")
+            logger.info(f"✅ Processed {pdf_file} -> {output_file} in {processing_time:.2f} seconds")
             
         except Exception as e:
             logger.error(f"❌ Error processing {pdf_file}: {str(e)}")
@@ -471,7 +558,12 @@ def process_directory(input_dir: str, output_dir: str, model_path: str = "models
             "successful": len([r for r in results_summary if r["status"] == "success"]),
             "failed": len([r for r in results_summary if r["status"] == "error"]),
             "results": results_summary,
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
+            "average_processing_time": round(
+                sum(r.get("processing_time_seconds", 0) for r in results_summary if r["status"] == "success") / 
+                max(1, len([r for r in results_summary if r["status"] == "success"])),
+                2
+            )
         }, f, indent=2)
     
     logger.info(f"Processing complete! Summary saved to {summary_file}")
@@ -479,9 +571,10 @@ def process_directory(input_dir: str, output_dir: str, model_path: str = "models
 def main():
     """Main function for command line execution."""
     parser = argparse.ArgumentParser(description="Extract structured outlines from PDFs")
-    parser.add_argument("--input", default="/app/input", help="Input directory containing PDFs")
-    parser.add_argument("--output", default="/app/output", help="Output directory for JSON files")
-    parser.add_argument("--model", default="prajjwal1/bert-mini", help="Model path")
+    parser.add_argument("--input", default="input", help="Input directory containing PDFs")
+    parser.add_argument("--output", default="output", help="Output directory for JSON files")
+    parser.add_argument("--model", default="models/bert-mini", help="Model path")
+    parser.add_argument("--optimize", action="store_true", help="Optimize for speed (under 10 seconds per file)")
     
     args = parser.parse_args()
     
@@ -489,12 +582,13 @@ def main():
     logger.info(f"Input directory: {args.input}")
     logger.info(f"Output directory: {args.output}")
     logger.info(f"Model: {args.model}")
+    logger.info(f"Speed optimization: {'Enabled' if args.optimize else 'Disabled'}")
     
     if not os.path.exists(args.input):
         logger.error(f"Input directory does not exist: {args.input}")
         return
     
-    process_directory(args.input, args.output, args.model)
+    process_directory(args.input, args.output, args.model, optimize_speed=args.optimize)
     
     logger.info("All processing complete!")
 

@@ -1,4 +1,11 @@
 {
   "title": "HOPE To SEE You THERE!",
-  "outline": []
+  "outline": [],
+  "metadata": {
+    "filename": "file05.pdf",
+    "model": "BERT-optimized",
+    "optimize_speed": true,
+    "processing_time_seconds": 0.06,
+    "outline_count": 0
+  }
 }
