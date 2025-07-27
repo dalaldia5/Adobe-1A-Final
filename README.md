@@ -120,20 +120,7 @@ Use our intelligent runner for best performance:
 ./run_comparison.sh
 ```
 
-#### ⚡ Direct Python Execution
 
-For custom parameters:
-
-```bash
-# Optimized mode (default)
-python main.py --optimize
-
-# Maximum accuracy mode
-python main.py --full-accuracy
-
-# Batch processing
-python test.py
-```
 
 ### 3. View Results
 
@@ -259,16 +246,6 @@ Our solution combines multiple AI techniques:
 
 ## 🛠️ Customization & Extension
 
-### Performance Tuning
-
-Adjust optimization parameters in `main.py`:
-
-```python
-# Speed vs. Accuracy trade-offs
-MAX_PAGES = 10          # Limit pages for faster processing
-BATCH_SIZE = 16         # Optimize for your hardware
-CONFIDENCE_THRESHOLD = 0.7  # Adjust quality filtering
-```
 
 ### Document Type Adaptation
 
