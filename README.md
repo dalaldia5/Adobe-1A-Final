@@ -82,12 +82,10 @@ pip install -r requirements.txt
 #### Command Line
 
 ```bash
-python main.py --input input --output output --model models/bert-mini
+python main.py 
 ```
 
-- `--input`: Path to the directory containing PDFs (default: `input`)
-- `--output`: Path to the directory for saving JSON outputs (default: `output`)
-- `--model`: Model path or Hugging Face model name (default: `prajjwal1/bert-mini` or local `models/bert-mini`)
+
 
 #### Example Output
 
