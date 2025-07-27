@@ -22,9 +22,8 @@
   ],
   "metadata": {
     "filename": "file04.pdf",
-    "model": "BERT-optimized",
-    "optimize_speed": true,
-    "processing_time_seconds": 0.04,
-    "outline_count": 3
+    "processing_timestamp": "2025-07-27T22:29:52.814614",
+    "outline_count": 3,
+    "processing_time_seconds": 0.59
   }
 }

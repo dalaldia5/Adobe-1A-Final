@@ -102,13 +102,30 @@
       "text": "3.2 Content",
       "page": 10,
       "confidence": 0.8
+    },
+    {
+      "level": "H1",
+      "text": "4. References",
+      "page": 12,
+      "confidence": 0.8
+    },
+    {
+      "level": "H1",
+      "text": "4.1 Trademarks",
+      "page": 12,
+      "confidence": 0.8
+    },
+    {
+      "level": "H1",
+      "text": "4.2 Documents and Web Sites",
+      "page": 12,
+      "confidence": 0.8
     }
   ],
   "metadata": {
     "filename": "file02.pdf",
-    "model": "BERT-optimized",
-    "optimize_speed": true,
-    "processing_time_seconds": 0.19,
-    "outline_count": 17
+    "processing_timestamp": "2025-07-27T22:29:48.395640",
+    "outline_count": 20,
+    "processing_time_seconds": 2.61
   }
 }

@@ -1,0 +1,44 @@
+{
+  "total_files": 5,
+  "successful": 5,
+  "failed": 0,
+  "results": [
+    {
+      "file": "file01.pdf",
+      "status": "success",
+      "title_found": true,
+      "outline_count": 2,
+      "processing_time_seconds": 0.53
+    },
+    {
+      "file": "file02.pdf",
+      "status": "success",
+      "title_found": true,
+      "outline_count": 20,
+      "processing_time_seconds": 2.61
+    },
+    {
+      "file": "file03.pdf",
+      "status": "success",
+      "title_found": true,
+      "outline_count": 33,
+      "processing_time_seconds": 3.83
+    },
+    {
+      "file": "file04.pdf",
+      "status": "success",
+      "title_found": true,
+      "outline_count": 3,
+      "processing_time_seconds": 0.59
+    },
+    {
+      "file": "file05.pdf",
+      "status": "success",
+      "title_found": true,
+      "outline_count": 0,
+      "processing_time_seconds": 0.19
+    }
+  ],
+  "timestamp": "2025-07-27T22:29:53.004536",
+  "average_processing_time": 1.55
+}

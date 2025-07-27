@@ -3,9 +3,8 @@
   "outline": [],
   "metadata": {
     "filename": "file05.pdf",
-    "model": "BERT-optimized",
-    "optimize_speed": true,
-    "processing_time_seconds": 0.06,
-    "outline_count": 0
+    "processing_timestamp": "2025-07-27T22:29:53.002429",
+    "outline_count": 0,
+    "processing_time_seconds": 0.19
   }
 }
