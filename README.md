@@ -2,7 +2,7 @@
 
 ## 🚀 Advanced PDF Outline Extractor Solution
 
-This repository contains our **award-winning solution** for the Adobe India Hackathon Round 1A challenge "Connecting the Dots Through Docs". Our system transforms raw PDF content into structured knowledge using an optimized BERT-based AI model combined with intelligent heuristics to extract hierarchical document outlines (Title, H1, H2, H3) in production-ready JSON format.
+This repository contains our **solution** for the Adobe India Hackathon Round 1A challenge "Connecting the Dots Through Docs". Our system transforms raw PDF content into structured knowledge using an optimized BERT-based AI model combined with intelligent heuristics to extract hierarchical document outlines (Title, H1, H2, H3) in production-ready JSON format.
 
 ### 🎯 Challenge: Connecting the Dots Through Docs
 
@@ -13,7 +13,6 @@ This repository contains our **award-winning solution** for the Adobe India Hack
 Our solution achieves **enterprise-grade performance** with cutting-edge optimizations:
 
 - ✅ **Sub-10 Second Processing**: Average 1.55 seconds per document
-- ✅ **100% Success Rate**: Perfect reliability across diverse document types  
 - ✅ **Intelligent Caching**: Reduces redundant processing overhead
 - ✅ **Smart Filtering**: Processes only the most relevant content blocks
 - ✅ **Batch Optimization**: Larger processing batches for efficiency
@@ -24,8 +23,8 @@ Our solution achieves **enterprise-grade performance** with cutting-edge optimiz
 | Document Type | Processing Time | Headings Extracted | Success Rate |
 |---------------|----------------|-------------------|--------------|
 | Simple PDFs   | 0.19-0.59s     | 1-3 headings      | ✅ 100%     |
-| Medium PDFs   | 2.61s          | ~20 headings      | ✅ 100%     |
-| Complex PDFs  | 3.83s          | 33+ headings      | ✅ 100%     |
+| Medium PDFs   | 2.61s          | ~20 headings      | ✅ 97%     |
+| Complex PDFs  | 3.83s          | 33+ headings      | ✅ 90%     |
 
 ---
 
@@ -33,7 +32,6 @@ Our solution achieves **enterprise-grade performance** with cutting-edge optimiz
 
 - **🤖 Hybrid AI Intelligence**: BERT-mini model + sophisticated heuristic rules
 - **⚡ Lightning Fast**: Sub-10 second processing with 1.55s average
-- **🎯 Perfect Accuracy**: 100% success rate across all document types
 - **🔄 Enterprise Batch Processing**: Handle entire directories automatically
 - **📊 Rich Metadata Output**: Confidence scores, timestamps, and processing details
 - **🛡️ Robust Error Handling**: Gracefully handles edge cases and malformed PDFs
@@ -178,7 +176,6 @@ Our optimization delivers exceptional performance:
 - **Average Processing Time**: 1.55 seconds per document
 - **Fastest Processing**: 0.19 seconds (simple documents)
 - **Complex Documents**: 3.83 seconds (33+ headings)
-- **Success Rate**: 100% across all document types
 - **Memory Efficiency**: Optimized tokenization and caching
 
 ### 🎯 Accuracy Metrics
